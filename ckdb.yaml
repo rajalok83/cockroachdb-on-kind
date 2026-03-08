@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ckdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cockroachdb
+  namespace: ckdb
+spec:
+  ports:
+    - port: 26257
+      name: grpc
+    - port: 8080
+      name: http
+  publishNotReadyAddresses: true
+  clusterIP: None
+  selector:
+    app: cockroachdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cockroachdb-public
+  namespace: ckdb
+spec:
+  type: NodePort
+  ports:
+    - port: 26257
+      name: grpc
+      nodePort: 31257
+    - port: 8080
+      name: http
+      nodePort: 31080
+  selector:
+    app: cockroachdb
+---
+# StatefulSet for Region: us-east-1
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cockroachdb-us-east-1
+  namespace: ckdb
+spec:
+  serviceName: "cockroachdb"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cockroachdb
+      region: us-east-1
+  template:
+    metadata:
+      labels:
+        app: cockroachdb
+        region: us-east-1
+    spec:
+      nodeSelector:
+        region: us-east-1
+      containers:
+        - name: cockroachdb
+          image: cockroachdb/cockroach:latest
+          ports:
+            - containerPort: 26257
+            - containerPort: 8080
+          volumeMounts:
+            - name: datadir
+              mountPath: /cockroach/cockroach-data
+          command:
+            - "/bin/bash"
+            - "-ecx"
+            - "exec /cockroach/cockroach start --insecure --advertise-host $(hostname -f) \
+              --join cockroachdb-us-east-1-0.cockroachdb.ckdb.svc.cluster.local,cockroachdb-us-west-1-0.cockroachdb.ckdb.svc.cluster.local \
+              --locality=region=us-east-1 \
+              --cache 25% --max-sql-memory 25%"
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+# StatefulSet for Region: us-west-1
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cockroachdb-us-west-1
+  namespace: ckdb
+spec:
+  serviceName: "cockroachdb"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cockroachdb
+      region: us-west-1
+  template:
+    metadata:
+      labels:
+        app: cockroachdb
+        region: us-west-1
+    spec:
+      nodeSelector:
+        region: us-west-1
+      containers:
+        - name: cockroachdb
+          image: cockroachdb/cockroach:latest
+          ports:
+            - containerPort: 26257
+            - containerPort: 8080
+          volumeMounts:
+            - name: datadir
+              mountPath: /cockroach/cockroach-data
+          command:
+            - "/bin/bash"
+            - "-ecx"
+            - "exec /cockroach/cockroach start --insecure --advertise-host $(hostname -f) \
+              --join cockroachdb-us-east-1-0.cockroachdb.ckdb.svc.cluster.local,cockroachdb-us-west-1-0.cockroachdb.ckdb.svc.cluster.local \
+              --locality=region=us-west-1 \
+              --cache 25% --max-sql-memory 25%"
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+# Auto-Init Job (Targets a valid pod name)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cockroachdb-init
+  namespace: ckdb
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: cockroachdb/cockroach:latest
+          command:
+            [
+              "/bin/bash",
+              "-c",
+              "./cockroach init --insecure --host=cockroachdb-us-east-1-0.cockroachdb.ckdb.svc.cluster.local:26257 || true",
+            ]

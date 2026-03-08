@@ -1,0 +1,38 @@
+### kind delete cluster --name ckdb
+### Deleting cluster "ckdb" ...
+### Deleted nodes: ["ckdb-worker6" "ckdb-worker5" "ckdb-worker3" "ckdb-control-plane" "ckdb-worker" "ckdb-worker2" "ckdb-worker4"]
+### kind create cluster --name ckdb --config ../cockroachdb/kind.yaml
+### docker ps -a | grep -v " (Paused)"|grep kindest | grep ckdb | cut -d" " -f1 | xargs docker pause
+### docker ps -a | grep " (Paused)"|grep kindest | grep ckdb | cut -d" " -f1 | xargs docker unpause
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: c0
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 31257 # Match your Service's nodePort
+        hostPort: 31257
+        listenAddress: "0.0.0.0"
+      - containerPort: 31080 # For the DB Console
+        hostPort: 8080
+        listenAddress: "0.0.0.0"
+  # Region: us-east-1
+  - role: worker
+    labels:
+      region: us-east-1
+  - role: worker
+    labels:
+      region: us-east-1
+  - role: worker
+    labels:
+      region: us-east-1
+  # Region: us-west-1
+  - role: worker
+    labels:
+      region: us-west-1
+  - role: worker
+    labels:
+      region: us-west-1
+  - role: worker
+    labels:
+      region: us-west-1
